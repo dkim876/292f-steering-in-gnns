@@ -44,21 +44,35 @@ def load_activations(acts_path: str, device: torch.device, dtype: torch.dtype = 
         raise ValueError(f"Expected [N, D] tensor in {acts_path}, got {tuple(x.shape)}")
     return x.to(device=device, dtype=dtype)
 
+def save_path(sae: SparseAutoencoder, epochs: int, acts_path: str, base_dir: str = "saes"):
+    import re
+    
+    parts = acts_path.split('/')
+    if len(parts) >= 2:
+        model_folder = parts[-2]
+    else:
+        model_folder = "unknown"
+    
+    save_folder = os.path.join(base_dir, model_folder)
+    os.makedirs(save_folder, exist_ok=True)
 
-def save_path(sae: SparseAutoencoder, epochs: int, base_dir: str = "saes"):
-    os.makedirs(base_dir, exist_ok=True)
+    act_filename = os.path.basename(acts_path)
+    layer_match = re.search(r'layer_(\d+)', act_filename)
+    layer_num = layer_match.group(1) if layer_match else "unknown"
+    
     run = 0
     while True:
-        name = f"sae_din{sae.d_in}_R{sae.R}_alpha{sae.alpha}_e{epochs}_r{run}.pt"
-        path = os.path.join(base_dir, name)
+        name = f"sae_layer_{layer_num}_R{sae.R}_alpha{sae.alpha}_e{epochs}_r{run}.pt"
+        path = os.path.join(save_folder, name)
         if not os.path.exists(path):
             return path
         run += 1
-        
+
 
 def train(
     sae: SparseAutoencoder,
     x_full: torch.Tensor,
+    acts_path: str,
     lr: float = 1e-3,
     epochs: int = 3,
     batch_size: int = 1024,
@@ -92,19 +106,19 @@ def train(
             if log_every and (step % log_every == 0):
                 print(f"epoch {epoch}, step {step}, loss {loss.item():.6f}")
 
-    out_path = save_path(sae, epochs, base_dir=save_dir)
+    out_path = save_path(sae, epochs, acts_path, base_dir=save_dir)
     torch.save(sae.state_dict(), out_path)
     print("Saved SAE to:", out_path)
     return out_path
 
 
 if __name__ == "__main__":
-    acts_path = "activations/gcn_l3_h256_r0/layer_0_postrelu.pt"
+    acts_path = "activations/gcn_l3_h256_r0/layer_1_postrelu.pt"
 
     R = 2
-    alpha = 1e-2
+    alpha = 5e-3
     lr = 1e-3
-    epochs = 100
+    epochs = 200
     batch_size = 512
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -116,4 +130,4 @@ if __name__ == "__main__":
 
     sae = SparseAutoencoder(d_in=d_in, R=R, alpha=alpha).to(device)
 
-    train(sae, x_full, lr=lr, epochs=epochs, batch_size=batch_size)
+    train(sae, x_full, acts_path, lr=lr, epochs=epochs, batch_size=batch_size)

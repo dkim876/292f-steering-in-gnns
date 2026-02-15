@@ -92,7 +92,7 @@ def load_gcn(ckpt_path):
 
 
 if __name__ == "__main__":
-    ckpt_path = "models/gcn_l3_h512_e500_r0.pt"
+    ckpt_path = "models/gcn_l3_h256_e500_r0.pt"
     model, data = load_gcn(ckpt_path)
     act_dir = activation_save_path(ckpt_path)
 

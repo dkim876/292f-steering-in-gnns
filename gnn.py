@@ -116,6 +116,7 @@ def test(model, data, split_idx, evaluator):
 
     return train_acc, valid_acc, test_acc
 
+
 def save_path(args, run, base_dir="models"):
     os.makedirs(base_dir, exist_ok=True)
     model = "sage" if args.use_sage else "gcn"
@@ -126,6 +127,7 @@ def save_path(args, run, base_dir="models"):
         if not os.path.exists(path):
             return path
         run += 1
+       
         
 def main():
     parser = argparse.ArgumentParser(description='OGBN-Arxiv (GNN)')
