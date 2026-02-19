@@ -116,7 +116,7 @@ if __name__ == "__main__":
     acts_path = "activations/gcn_l3_h256_r0/layer_1_postrelu.pt"
 
     R = 2
-    alpha = 5e-3
+    alpha = 1e-3
     lr = 1e-3
     epochs = 200
     batch_size = 512

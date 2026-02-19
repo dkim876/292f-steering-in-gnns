@@ -110,11 +110,14 @@ def rescale_activations(activations: torch.Tensor, max_val: int = 10):
         return torch.zeros_like(activations, dtype=torch.long)
 
     scaled = (activations / max_act) * max_val
-    return scaled.round().long()
+    return scaled.round()
 
 
-def topk_nodes_for_feature(c: torch.Tensor, feature_id: int, node_metadata, K: int = 10):
-    values, indices = torch.topk(c[:, feature_id], k=K)
+def topk_nodes_for_feature(c: torch.Tensor, feature_id: int, node_metadata, freq: torch.Tensor, K: int = 10):
+    scores = c[:, feature_id].float()
+    adjusted = scores / torch.log1p(freq + 1e-6) ** 0.5
+
+    values, indices = torch.topk(adjusted, k=K)
     scaled = rescale_activations(values, max_val=10)
 
     examples_list = []
@@ -137,6 +140,24 @@ def topk_nodes_for_feature(c: torch.Tensor, feature_id: int, node_metadata, K: i
     return examples_text, examples_list
 
 
+def compute_node_frequency(c: torch.Tensor, K: int = 20):
+    device = c.device
+    num_nodes = c.shape[0]
+
+    freq = torch.zeros(num_nodes, device=device)
+
+    for fid in range(c.shape[1]):
+        col = c[:, fid]
+
+        if col.max().item() == 0:
+            continue
+
+        _, idx = torch.topk(col, K)
+        freq[idx] += 1.0
+
+    return freq
+
+
 def interpret_feature(feature_id: int, examples_text: str):
     resp = client.responses.create(
         model="gpt-4.1-mini",
@@ -144,14 +165,17 @@ def interpret_feature(feature_id: int, examples_text: str):
             {
                 "role": "system",
                 "content": (
-                    "You are interpreting a latent feature discovered in a neural network. "
-                    "Given several papers that strongly activate this feature, write 1–2 "
-                    "sentences describing the common topic or concept."
+                    "You are labeling a latent feature in a neural network. "
+                    "Given examples, produce a short, concrete topic label. "
+                    "Write ONE concise sentence fragment. "
+                    "No filler. No explanations. "
+                    "Do NOT say 'this feature' or 'this latent feature'. "
+                    "Max 12 words."
                 ),
             },
             {
                 "role": "user",
-                "content": f"Top activating papers:\n{examples_text}\n\nExplanation:",
+                "content": f"Top activating papers:\n{examples_text}\n\nLabel:",
             },
         ],
     )
@@ -171,6 +195,9 @@ def interpret_features(
         _, c = sae(x_full.to(device))
 
     print("c shape:", tuple(c.shape))
+
+    print("Computing node frequencies...")
+    freq = compute_node_frequency(c, K=20)
 
     if os.path.exists(out_path):
         with open(out_path, "r") as f:
@@ -192,7 +219,7 @@ def interpret_features(
 
         print(f"Interpreting feature {fid}...")
 
-        examples_text, examples_list = topk_nodes_for_feature(c, fid, node_metadata, K=K)
+        examples_text, examples_list = topk_nodes_for_feature(c, fid, node_metadata, freq, K=K)
         explanation = interpret_feature(fid, examples_text)
 
         results[key] = {
